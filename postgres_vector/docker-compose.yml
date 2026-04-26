@@ -1,0 +1,26 @@
+services:
+  # servicesの直下がコンテナの名前
+  postgres_pgvector:
+    build:
+      context: ./env_and_docker
+      dockerfile: Dockerfile
+
+    # ここで名前設定しても、servicesの直下の名前が優先される。
+    container_name: postgres_pgvector
+
+    environment:
+      POSTGRES_DB: ragdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    
+    ports:
+      - 5432:5432
+    
+    # コンテナが削除されると中のデータが消えてしまうため、
+    # ローカルにマウントして保存場所を作っておく。
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

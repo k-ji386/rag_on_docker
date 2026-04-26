@@ -1,0 +1,5 @@
+/chat_llm/download_models
+/chat_llm/llama.cpp
+/rag_jupyterlab/sentence_embedding_models/static-embedding-japanese
+/rag_jupyterlab/env_and_docker/root_jupyter
+/rag_jupyterlab/workspace/.ipynb_checkpoints

@@ -1,0 +1,31 @@
+services:
+  jupyter_lab:
+    build:
+      context: ./env_and_docker
+      dockerfile: Dockerfile
+
+    # Jupyter Labのentrypointの設定
+    entrypoint: >
+      jupyter-lab
+      --allow-root
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --NotebookApp.token=""
+      --notebook-dir=/workspace
+
+    # 解放するポートの設定
+    # コンテナ内で8888番ポートを公開
+    # ホストのポート8888をコンテナのポート8888にマッピングする。
+    # 127.0.0.1 -> ホストマシンのみのアクセスを許可（外部ネットワークは不可）
+    expose:
+      - "8888"
+    ports:
+      - "127.0.0.1:8888:8888"
+
+    # マウントの設定
+    # ホストのroot_jupyterディレクトリをコンテナ内の/root/.jupyterにマッピング
+    # workspaceも同様
+    volumes:
+      - ./env_and_docker/root_jupyter:/root/.jupyter
+      - ./workspace:/workspace

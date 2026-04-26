@@ -1,0 +1,98 @@
+services:
+
+  # ローカルLLMのコンテナ
+  llama-cpp:
+    build: 
+      context: ./chat_llm/llama.cpp
+      dockerfile: ./.devops/cuda.Dockerfile
+      args:
+        # オプションで、build時のGPUアーキテクチャを指定できる。
+        # defaultのallは全GPU用アーキテクチャ構築のため、ビルドに時間がかかる。
+        CUDA_DOCKER_ARCH: "86" # GPUアーキテクチャを指定。"86"はRTX3000系統用。
+    image: llama-cpp-llama-cpp
+    container_name: llama_for_rag
+    volumes:
+      - ./chat_llm:/chat_llm
+    # llama.cpp をサーバーモードで起動
+    command: >
+      -m /chat_llm/download_models/Llama-3-ELYZA-JP-8B-q4_k_m.gguf
+      -n 512
+      --n-gpu-layers 1
+    tty: true
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices: # GPUの設定
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
+  # ベクトルデータベースのコンテナ
+  postgres_pgvector:
+    build:
+      context: ./postgres_vector/env_and_docker
+      dockerfile: Dockerfile
+    image: postgres_vector-postgres_pgvector
+    container_name: postgres_vector_db
+    environment:
+      POSTGRES_DB: ragdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres 
+    ports:
+      - 5432:5432
+    # コンテナが削除されると中のデータが消えてしまうため、
+    # ローカルにマウントして保存場所を作っておく。
+    volumes:
+      - ./postgres_vector/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata_rag_test:/var/lib/postgresql/data
+
+  # pythonコマンドでのユーザー操作用、jupyterlab。
+  jupyter_lab:
+    build:
+      context: ./rag_jupyterlab/env_and_docker
+      dockerfile: Dockerfile
+    image: rag_jupyterlab-jupyter_lab
+    # ここで名前設定しても、servicesの直下の名前が優先される。
+    container_name: rag_jupyter_lab
+    # Jupyter Labのentrypointの設定
+    entrypoint: >
+      jupyter-lab
+      --allow-root
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --NotebookApp.token=""
+      --notebook-dir=/jupyterlab/workspace
+    # 解放するポートの設定
+    # コンテナ内で8888番ポートを公開
+    # ホストのポート8888をコンテナのポート8888にマッピングする。
+    # 127.0.0.1 -> ホストマシンのみのアクセスを許可（外部ネットワークは不可）
+    expose:
+      - "8888"
+    ports:
+      - "127.0.0.1:8888:8888"
+    depends_on:
+      - llama-cpp
+      - postgres_pgvector
+    # マウントの設定
+    # ホストのroot_jupyterディレクトリをコンテナ内の/root/.jupyterにマッピング
+    # workspaceも同様
+    volumes:
+      - ./rag_jupyterlab/env_and_docker/root_jupyter:/root/.jupyter
+      - ./rag_jupyterlab/workspace:/jupyterlab/workspace
+      - ./rag_jupyterlab/sentence_embedding_models:/sentence_embedding_models
+    # コンテナ起動時の初期ディレクトリを設定
+    working_dir: /jupyterlab/workspace     
+    # GPUがコンテナ上で使用できるようにする。
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  pgdata_rag_test:
